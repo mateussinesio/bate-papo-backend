@@ -3,6 +3,7 @@ package bate_papo.service;
 import bate_papo.exception.UsernameAlreadyExistsException;
 import bate_papo.model.User;
 import bate_papo.repository.UserRepository;
+import bate_papo.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,20 +18,22 @@ public class AuthenticationService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public Mono<User> register(User user) {
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    public Mono<String> register(User user) {
         return userRepository.findByUsername(user.getUsername())
-                .flatMap(existingUser -> {
-                    return Mono.error(new UsernameAlreadyExistsException("Username already taken."));
-                })
+                .flatMap(existingUser -> Mono.error(new UsernameAlreadyExistsException("Username already taken.")))
                 .then(Mono.defer(() -> {
                     user.setPassword(passwordEncoder.encode(user.getPassword()));
-                    return userRepository.save(user);
+                    return userRepository.save(user).thenReturn("User registered successfully");
                 }));
     }
 
-    public Mono<User> login(User user) {
-        return userRepository.findByUsername(user.getUsername())
-                .filter(u -> passwordEncoder.matches(user.getPassword(), u.getPassword()))
-                .switchIfEmpty(Mono.error(new RuntimeException("Invalid credentials.")));
+    public Mono<String> login(String username, String password) {
+        return userRepository.findByUsername(username)
+                .filter(u -> passwordEncoder.matches(password, u.getPassword()))
+                .switchIfEmpty(Mono.error(new RuntimeException("Invalid credentials.")))
+                .map(u -> jwtUtil.generateToken(u.getUsername()));
     }
 }

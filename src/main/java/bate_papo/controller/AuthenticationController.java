@@ -1,5 +1,6 @@
 package bate_papo.controller;
 
+import bate_papo.dto.LoginRequestDTO;
 import bate_papo.exception.UsernameAlreadyExistsException;
 import bate_papo.model.User;
 import bate_papo.security.JwtUtil;
@@ -23,19 +24,20 @@ public class AuthenticationController {
     private JwtUtil jwtUtil;
 
     @PostMapping("/register")
-    public Mono<ResponseEntity<User>> register(@RequestBody User user) {
+    public Mono<ResponseEntity<String>> register(@RequestBody User user) {
         return authenticationService.register(user)
-                .map(registeredUser -> ResponseEntity.status(HttpStatus.CREATED).body(registeredUser))
+                .map(registeredUser -> ResponseEntity.status(HttpStatus.CREATED).body("User registered successfully."))
                 .onErrorResume(UsernameAlreadyExistsException.class, e ->
-                        Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).build())
-                );
+                        Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage())))
+                .onErrorResume(Exception.class, e ->
+                        Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred during registration.")));
     }
 
     @PostMapping("/login")
-    public Mono<ResponseEntity<User>> login(@RequestBody User user, ServerHttpResponse response) {
-        return authenticationService.login(user)
-                .map(loginResponse -> {
-                    ResponseCookie jwtCookie = ResponseCookie.from("jwt", jwtUtil.generateToken(user.getUsername()))
+    public Mono<ResponseEntity<String>> login(@RequestBody LoginRequestDTO loginRequest, ServerHttpResponse response) {
+        return authenticationService.login(loginRequest.username(), loginRequest.password())
+                .map(token -> {
+                    ResponseCookie jwtCookie = ResponseCookie.from("jwt", token)
                             .httpOnly(true)
                             .secure(true)
                             .path("/")
@@ -45,14 +47,15 @@ public class AuthenticationController {
 
                     response.addCookie(jwtCookie);
 
-                    return ResponseEntity.ok(loginResponse);
-                });
+                    return ResponseEntity.ok("Login successful.");
+                })
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials.")));
     }
 
     @GetMapping("/userinfo")
     public Mono<ResponseEntity<String>> getUserInfo(@CookieValue(name = "jwt", required = false) String token) {
         if (token == null || !jwtUtil.validateToken(token)) {
-            return Mono.just(ResponseEntity.status(401).body("Invalid or missing token."));
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid or missing token."));
         }
 
         String username = jwtUtil.extractUsername(token);
@@ -60,7 +63,7 @@ public class AuthenticationController {
         if (username != null) {
             return Mono.just(ResponseEntity.ok(username));
         } else {
-            return Mono.just(ResponseEntity.status(401).body("Token does not contain a valid username."));
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token does not contain a valid username."));
         }
     }
 
@@ -69,7 +72,7 @@ public class AuthenticationController {
         if (token != null && jwtUtil.validateToken(token)) {
             return Mono.just(ResponseEntity.ok(true));
         }
-        return Mono.just(ResponseEntity.status(401).body(false));
+        return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(false));
     }
 
     @PostMapping("/logout")
