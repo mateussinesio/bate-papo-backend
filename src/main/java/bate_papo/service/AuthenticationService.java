@@ -1,5 +1,6 @@
 package bate_papo.service;
 
+import bate_papo.dto.UserResponseDTO;
 import bate_papo.exception.UsernameAlreadyExistsException;
 import bate_papo.model.User;
 import bate_papo.repository.UserRepository;
@@ -21,12 +22,13 @@ public class AuthenticationService {
     @Autowired
     private JwtUtil jwtUtil;
 
-    public Mono<String> register(User user) {
+    public Mono<UserResponseDTO> register(User user) {
         return userRepository.findByUsername(user.getUsername())
                 .flatMap(existingUser -> Mono.error(new UsernameAlreadyExistsException("Username already taken.")))
                 .then(Mono.defer(() -> {
                     user.setPassword(passwordEncoder.encode(user.getPassword()));
-                    return userRepository.save(user).thenReturn("User registered successfully");
+                    return userRepository.save(user)
+                            .map(savedUser -> new UserResponseDTO(savedUser.getUsername()));
                 }));
     }
 

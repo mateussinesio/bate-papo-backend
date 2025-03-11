@@ -1,5 +1,6 @@
 package bate_papo.controller;
 
+import bate_papo.dto.*;
 import bate_papo.model.ChatMessage;
 import bate_papo.service.ChatService;
 import bate_papo.websocket.ChatWebSocketHandler;
@@ -20,20 +21,44 @@ public class ChatController {
     private ChatWebSocketHandler chatWebSocketHandler;
 
     @GetMapping("/messages")
-    public Flux<ChatMessage> getAllMessages() {
-        return chatService.getAllMessages();
+    public Flux<ChatMessageResponseDTO> getAllMessages() {
+        return chatService.getAllMessages()
+                .map(chatMessage -> new ChatMessageResponseDTO(
+                        chatMessage.getId(),
+                        chatMessage.getSender(),
+                        chatMessage.getContent(),
+                        chatMessage.getTimestamp()
+                ));
     }
 
     @PostMapping("/send")
-    public Mono<ChatMessage> sendMessage(@RequestBody ChatMessage chatMessage) {
-        return chatService.saveMessage(chatMessage);
+    public Mono<ResponseEntity<ChatMessageResponseDTO>> sendMessage(@RequestBody ChatMessageRequestDTO chatMessageRequest) {
+        ChatMessage chatMessage = new ChatMessage();
+        chatMessage.setSender(chatMessageRequest.sender());
+        chatMessage.setContent(chatMessageRequest.content());
+
+        return chatService.saveMessage(chatMessage)
+                .map(savedMessage -> ResponseEntity.ok(new ChatMessageResponseDTO(
+                        savedMessage.getId(),
+                        savedMessage.getSender(),
+                        savedMessage.getContent(),
+                        savedMessage.getTimestamp()
+                )));
     }
 
     @PutMapping("/edit-message/{id}")
-    public Mono<ResponseEntity<ChatMessage>> editMessage(@PathVariable String id, @RequestBody ChatMessage updatedMessage) {
-        return chatService.editMessage(id, updatedMessage)
-                .flatMap(chatMessage -> chatWebSocketHandler.broadcastEditMessage(chatMessage)
-                        .then(Mono.just(ResponseEntity.ok(chatMessage))));
+    public Mono<ResponseEntity<ChatMessageResponseDTO>> editMessage(
+            @PathVariable String id,
+            @RequestBody EditMessageRequestDTO editMessageRequest
+    ) {
+        return chatService.editMessage(id, editMessageRequest.content())
+                .flatMap(updatedMessage -> chatWebSocketHandler.broadcastEditMessage(updatedMessage)
+                        .then(Mono.just(ResponseEntity.ok(new ChatMessageResponseDTO(
+                                updatedMessage.getId(),
+                                updatedMessage.getSender(),
+                                updatedMessage.getContent(),
+                                updatedMessage.getTimestamp()
+                        )))));
     }
 
     @DeleteMapping("/delete-message/{id}")

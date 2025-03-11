@@ -40,10 +40,10 @@ public class ChatService {
                 );
     }
 
-    public Mono<ChatMessage> editMessage(String id, ChatMessage updatedMessage) {
+    public Mono<ChatMessage> editMessage(String id, String newContent) {
         return chatMessageRepository.findById(id)
                 .flatMap(existingMessage -> {
-                    return encryptionService.encryptMessage(updatedMessage.getContent())
+                    return encryptionService.encryptMessage(newContent)
                             .flatMap(encryptedText -> {
                                 existingMessage.setContent(encryptedText);
                                 return chatMessageRepository.save(existingMessage)

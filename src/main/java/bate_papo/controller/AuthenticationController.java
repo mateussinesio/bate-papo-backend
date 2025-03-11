@@ -1,6 +1,8 @@
 package bate_papo.controller;
 
 import bate_papo.dto.LoginRequestDTO;
+import bate_papo.dto.MessageResponseDTO;
+import bate_papo.dto.RegisterRequestDTO;
 import bate_papo.exception.UsernameAlreadyExistsException;
 import bate_papo.model.User;
 import bate_papo.security.JwtUtil;
@@ -24,13 +26,20 @@ public class AuthenticationController {
     private JwtUtil jwtUtil;
 
     @PostMapping("/register")
-    public Mono<ResponseEntity<String>> register(@RequestBody User user) {
+    public Mono<ResponseEntity<MessageResponseDTO>> register(@RequestBody RegisterRequestDTO registerRequest) {
+        User user = new User();
+        user.setUsername(registerRequest.username());
+        user.setPassword(registerRequest.password());
+
         return authenticationService.register(user)
-                .map(registeredUser -> ResponseEntity.status(HttpStatus.CREATED).body("User registered successfully."))
+                .map(registeredUser -> ResponseEntity.status(HttpStatus.CREATED)
+                        .body(new MessageResponseDTO("User registered successfully.")))
                 .onErrorResume(UsernameAlreadyExistsException.class, e ->
-                        Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage())))
+                        Mono.just(ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(new MessageResponseDTO(e.getMessage()))))
                 .onErrorResume(Exception.class, e ->
-                        Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred during registration.")));
+                        Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .body(new MessageResponseDTO("An error occurred during registration."))));
     }
 
     @PostMapping("/login")
